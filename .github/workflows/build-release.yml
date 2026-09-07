@@ -25,6 +25,11 @@ jobs:
         with:
           node-version: '20.18.2'
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Enable npm for native modules
         run: npm config set build-from-source true; npm config set foreground-scripts true
         shell: bash
@@ -44,13 +49,13 @@ jobs:
         shell: bash
 
       - name: Build VSCode Windows x64 (full release)
-        run: npx gulp vscode-win32-x64-min-ci
+        run: npm run gulp -- vscode-win32-x64
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
 
       - name: Build Inno Setup installer (system + user)
-        run: npx gulp vscode-win32-x64-inno-updater vscode-win32-x64-system-setup vscode-win32-x64-user-setup
+        run: npm run gulp -- vscode-win32-x64-inno-updater vscode-win32-x64-system-setup vscode-win32-x64-user-setup
         shell: bash
 
       - name: Gather artifacts
