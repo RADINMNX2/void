@@ -30,10 +30,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Enable npm for native modules
-        run: npm config set build-from-source true; npm config set foreground-scripts true
-        shell: bash
-
       - name: Install npm dependencies
         run: npm ci
         env:
