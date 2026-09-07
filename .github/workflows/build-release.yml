@@ -1,0 +1,106 @@
+name: Build & Release Windows exe
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.18.2'
+
+      - name: Enable npm for native modules
+        run: npm config set build-from-source true; npm config set foreground-scripts true
+        shell: bash
+
+      - name: Install npm dependencies
+        run: npm ci
+        env:
+          npm_config_arch: x64
+          npm_config_foreground_scripts: 'true'
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+
+      - name: Build React components
+        run: npm run buildreact
+        shell: bash
+
+      - name: Build VSCode Windows x64 (full release)
+        run: npx gulp vscode-win32-x64-min-ci
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+
+      - name: Build Inno Setup installer (system + user)
+        run: npx gulp vscode-win32-x64-inno-updater vscode-win32-x64-system-setup vscode-win32-x64-user-setup
+        shell: bash
+
+      - name: Gather artifacts
+        id: gather
+        run: |
+          mkdir -p dist
+          cp -r ../VSCode-win32-x64 dist/Void
+          # Inno Setup outputs to .build/win32-x64/{system,user}-setup/VSCodeSetup.exe
+          cp .build/win32-x64/system-setup/VSCodeSetup.exe dist/VoidSetup-system.exe 2>/dev/null || true
+          cp .build/win32-x64/user-setup/VSCodeSetup.exe dist/VoidSetup-user.exe 2>/dev/null || true
+          ls -la dist
+        shell: bash
+
+      - name: Create portable zip
+        run: |
+          cd dist
+          7z a -tzip ../Void-win32-x64.zip Void/*
+          ls -la ../Void-win32-x64.zip
+        shell: bash
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Void-win32-x64
+          path: |
+            dist/VoidSetup-system.exe
+            dist/VoidSetup-user.exe
+            Void-win32-x64.zip
+          retention-days: 5
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: "Void ${{ inputs.tag }}"
+          body: |
+            ## Void Editor — Windows x64
+
+            ### Downloads
+            - **VoidSetup-system.exe** — System installer (installs for all users)
+            - **VoidSetup-user.exe** — User installer (installs for current user)
+            - **Void-win32-x64.zip** — Portable zip (extract & run `Void.exe`)
+
+            ### Build info
+            - Commit: `${{ github.sha }}`
+          files: |
+            dist/VoidSetup-system.exe
+            dist/VoidSetup-user.exe
+            Void-win32-x64.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
